@@ -49,6 +49,7 @@ function shuffle(items) {
 
   for (let i = arr.length - 1; i > 0; i--) {
     const j = Math.floor(Math.random() * (i + 1));
+
     [arr[i], arr[j]] = [arr[j], arr[i]];
   }
 
@@ -56,9 +57,15 @@ function shuffle(items) {
 }
 
 function fillQuestion(q, revealed) {
+  const answers =
+    q.answers ||
+    (q.answer ? [q.answer] : []);
+
   const parts = String(q.question).split(/_{5,}/g);
 
-  if (parts.length === 1) return q.question;
+  if (parts.length === 1) {
+    return q.question;
+  }
 
   const out = [];
 
@@ -76,7 +83,7 @@ function fillQuestion(q, revealed) {
           className={revealed ? 'answer' : 'blank'}
         >
           {revealed
-            ? (q.answers?.[i] || '???')
+            ? (answers[i] || '???')
             : '____________'}
         </span>
       );
@@ -108,7 +115,9 @@ function App() {
     : null;
 
   const topics = useMemo(() => {
-    return [...new Set(questions.map((q) => q.topic))].sort();
+    return [...new Set(
+      questions.map((q) => q.topic || 'Genel')
+    )].sort();
   }, [questions]);
 
   function chooseSubject(nextSubject) {
@@ -141,7 +150,7 @@ function App() {
 
     if (mode === 'topic') {
       selected = questions.filter(
-        (q) => q.topic === selectedTopic
+        (q) => (q.topic || 'Genel') === selectedTopic
       );
 
       ttl = selectedTopic;
@@ -154,7 +163,9 @@ function App() {
           .map(([id]) => id)
       );
 
-      selected = questions.filter((q) => ids.has(q.id));
+      selected = questions.filter((q) =>
+        ids.has(q.id)
+      );
 
       ttl = 'Yanlış Sorular Tekrarı';
 
@@ -185,9 +196,9 @@ function App() {
     const nextStats = {
       ...stats,
 
-      [q.id]: {
+      [q.id || i]: {
         subject,
-        topic: q.topic,
+        topic: q.topic || 'Genel',
         subtopic: q.subtopic || '',
         result: ok ? 'correct' : 'wrong',
         time: new Date().toISOString(),
@@ -199,7 +210,10 @@ function App() {
     saveStats(subject, nextStats);
 
     if (i + 1 >= session.length) {
-      alert('Oturum bitti. Bu oturumdaki tüm sorular tamamlandı.');
+      alert(
+        'Oturum bitti. Bu oturumdaki tüm sorular tamamlandı.'
+      );
+
       setPage('menu');
     }
 
@@ -223,7 +237,22 @@ function App() {
       };
     });
 
-    questions.forEach((q) => map[q.topic].total++);
+    questions.forEach((q) => {
+      const t = q.topic || 'Genel';
+
+      if (!map[t]) {
+        map[t] = {
+          topic: t,
+          total: 0,
+          seen: 0,
+          correct: 0,
+          wrong: 0,
+          rate: 0,
+        };
+      }
+
+      map[t].total++;
+    });
 
     Object.values(stats).forEach((record) => {
       if (
@@ -233,25 +262,31 @@ function App() {
       ) {
         map[record.topic].seen++;
 
-        if (record.result === 'correct')
+        if (record.result === 'correct') {
           map[record.topic].correct++;
+        }
 
-        else
+        else {
           map[record.topic].wrong++;
+        }
       }
     });
 
     Object.values(map).forEach((row) => {
-      const done = row.correct + row.wrong;
+      const done =
+        row.correct + row.wrong;
 
       row.rate = done
-        ? Math.round((row.correct / done) * 1000) / 10
+        ? Math.round(
+            (row.correct / done) * 1000
+          ) / 10
         : 0;
     });
 
     return Object.values(map).sort(
       (a, b) =>
-        (a.wrong === 0) - (b.wrong === 0) ||
+        (a.wrong === 0) -
+          (b.wrong === 0) ||
         b.wrong - a.wrong ||
         a.rate - b.rate
     );
@@ -284,23 +319,27 @@ function App() {
           </p>
 
           <div className="subject-grid">
-            {Object.entries(DATASETS).map(([key, ds]) => (
-              <button
-                key={key}
-                className="btn subject-btn"
-                onClick={() => chooseSubject(key)}
-              >
-                <span className="subject-icon">
-                  {ds.icon}
-                </span>
+            {Object.entries(DATASETS).map(
+              ([key, ds]) => (
+                <button
+                  key={key}
+                  className="btn subject-btn"
+                  onClick={() =>
+                    chooseSubject(key)
+                  }
+                >
+                  <span className="subject-icon">
+                    {ds.icon}
+                  </span>
 
-                <span>{ds.label}</span>
+                  <span>{ds.label}</span>
 
-                <small>
-                  {ds.questions.length} soru
-                </small>
-              </button>
-            ))}
+                  <small>
+                    {ds.questions.length} soru
+                  </small>
+                </button>
+              )
+            )}
           </div>
 
         </section>
@@ -308,7 +347,248 @@ function App() {
     );
   }
 
-  return <div />;
+  if (page === 'menu') {
+    return (
+      <main className="page">
+        <section className="card">
+
+          <h1 className="title">
+            {dataset.icon} {dataset.label} Çalışma
+          </h1>
+
+          <p className="subtitle">
+            {questions.length} soru • {topics.length} konu
+          </p>
+
+          <button
+            className="btn"
+            onClick={() => setPage('topic')}
+          >
+            Konu Bazlı Çalış
+          </button>
+
+          <button
+            className="btn"
+            onClick={() => start('all')}
+          >
+            Tüm Konuları Karışık Tekrar Et
+          </button>
+
+          <button
+            className="btn bad"
+            onClick={() => start('wrong')}
+          >
+            Yanlış Yaptığım Soruları Çalış
+          </button>
+
+          <button
+            className="btn ghost"
+            onClick={() => setPage('stats')}
+          >
+            İstatistikler
+          </button>
+
+          <button
+            className="btn ghost"
+            onClick={changeSubject}
+          >
+            Ders Değiştir
+          </button>
+
+        </section>
+      </main>
+    );
+  }
+
+  if (page === 'topic') {
+    return (
+      <main className="page">
+        <section className="card">
+
+          <h1 className="title">
+            Konu Seç
+          </h1>
+
+          <select
+            className="select"
+            value={topic}
+            onChange={(e) =>
+              setTopic(e.target.value)
+            }
+          >
+            <option value="">
+              Konu seç
+            </option>
+
+            {topics.map((t) => (
+              <option key={t} value={t}>
+                {t}
+              </option>
+            ))}
+          </select>
+
+          <button
+            className="btn"
+            disabled={!topic}
+            onClick={() =>
+              start('topic', topic)
+            }
+          >
+            Bu Konuyu Çalış
+          </button>
+
+          <button
+            className="btn ghost"
+            onClick={() => setPage('menu')}
+          >
+            Ana Menü
+          </button>
+
+        </section>
+      </main>
+    );
+  }
+
+  if (page === 'stats') {
+    return (
+      <main className="page">
+        <section className="card">
+
+          <h1 className="title">
+            İstatistikler
+          </h1>
+
+          <div className="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Konu</th>
+                  <th>Soru</th>
+                  <th>Çalışılan</th>
+                  <th>Doğru</th>
+                  <th>Yanlış</th>
+                  <th>Başarı %</th>
+                </tr>
+              </thead>
+
+              <tbody>
+                {rows().map((r) => (
+                  <tr key={r.topic}>
+                    <td>{r.topic}</td>
+                    <td>{r.total}</td>
+                    <td>{r.seen}</td>
+                    <td>{r.correct}</td>
+                    <td>{r.wrong}</td>
+                    <td>{r.rate}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+
+          <div className="row">
+            <button
+              className="btn ghost"
+              onClick={() => setPage('menu')}
+            >
+              Ana Menü
+            </button>
+
+            <button
+              className="btn bad"
+              onClick={() => start('wrong')}
+            >
+              Yanlış Soruları Çalış
+            </button>
+
+            <button
+              className="btn ghost"
+              onClick={reset}
+            >
+              İstatistikleri Sıfırla
+            </button>
+          </div>
+
+        </section>
+      </main>
+    );
+  }
+
+  return (
+    <main className="page">
+      <section className="card">
+
+        <div className="topbar">
+          <h1 className="title">
+            {title}
+          </h1>
+
+          <div className="counter">
+            {i + 1} / {session.length}
+          </div>
+        </div>
+
+        <div className="progress">
+          <div
+            style={{
+              width: `${(i / session.length) * 100}%`,
+            }}
+          />
+        </div>
+
+        <section className="card study-card">
+
+          <p className="subtitle">
+            {q?.subtopic || ''}
+          </p>
+
+          <div className="question">
+            {q && fillQuestion(q, revealed)}
+          </div>
+
+        </section>
+
+        <div className="row">
+
+          {!revealed ? (
+            <button
+              className="btn"
+              onClick={() => setRevealed(true)}
+            >
+              Cevabı Yerine Koy
+            </button>
+          ) : (
+            <>
+              <button
+                className="btn good"
+                onClick={() => record(true)}
+              >
+                Doğru Yaptım
+              </button>
+
+              <button
+                className="btn bad"
+                onClick={() => record(false)}
+              >
+                Yanlış Yaptım
+              </button>
+            </>
+          )}
+
+          <button
+            className="btn ghost"
+            onClick={() => setPage('menu')}
+          >
+            Ana Menü
+          </button>
+
+        </div>
+
+      </section>
+    </main>
+  );
 }
 
-createRoot(document.getElementById('root')).render(<App />);
+createRoot(
+  document.getElementById('root')
+).render(<App />);
